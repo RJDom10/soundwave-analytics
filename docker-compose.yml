@@ -1,4 +1,4 @@
-version: "3.9"
+#version: "3.9"
 
 networks:
   soundwave-net:
@@ -8,6 +8,8 @@ volumes:
   mysql_data:
   kafka_data:
   airflow_logs:
+  hadoop_namenode:    
+  hadoop_datanode:   
 
 services:
 
@@ -102,3 +104,74 @@ services:
       JUPYTER_TOKEN: "soundwave"
     networks:
       - soundwave-net
+
+# ── Hadoop Namenode ─────────────────────────────────────
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: sw_namenode
+    ports:
+      - "9870:9870"   # HDFS Web UI
+      - "9000:9000"   # HDFS RPC
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    environment:
+      CLUSTER_NAME: soundwave
+      CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+    networks:
+      - soundwave-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ── Hadoop Datanode ──────────────────────────────────────
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: sw_datanode
+    depends_on:
+      - namenode
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    environment:
+      CORE_CONF_fs_defaultFS: hdfs://namenode:9000
+    networks:
+      - soundwave-net
+
+# ── Spark Master ─────────────────────────────────────────
+  spark-master:
+    image: apache/spark:3.5.0
+    container_name: sw_spark_master
+    user: root
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "7077:7077"    # Spark master RPC
+      - "8090:8080"    # Spark master Web UI
+    environment:
+      SPARK_MASTER_HOST: spark-master
+      SPARK_MASTER_PORT: "7077"
+      SPARK_MASTER_WEBUI_PORT: "8080"
+    volumes:
+      - ./services/streaming/jobs:/app/jobs
+    networks:
+      - soundwave-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ── Spark Worker ─────────────────────────────────────────
+  spark-worker:
+    image: apache/spark:3.5.0
+    container_name: sw_spark_worker
+    user: root
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_WORKER_MEMORY: 4g
+      SPARK_WORKER_CORES: "2"
+      SPARK_WORKER_WEBUI_PORT: "8081"
+    networks:
+      - soundwave-net  
