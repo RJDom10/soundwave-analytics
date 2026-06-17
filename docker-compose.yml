@@ -175,3 +175,36 @@ services:
       SPARK_WORKER_WEBUI_PORT: "8081"
     networks:
       - soundwave-net  
+
+
+  # ── Productor de LastFM ──────────────────────────────────
+  lastfm-producer:
+    build: ./services/ingesta/producers
+    container_name: sw_lastfm_producer
+    command: ["lastfm_producer.py"] # <── Dockerfile ejecuta esto usando el ENTRYPOINT
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    env_file:
+      - .env # <── Senior: Centraliza las credenciales en su archivo .env dedicado
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092 # <── Red interna de Docker
+    networks:
+      - soundwave-net
+
+  # ── Simulador de Eventos (Si quieres prenderlo también) ──
+  event-simulator:
+    build: ./services/ingesta/producers
+    container_name: sw_event_simulator
+    command: ["event_simulator.py"] # <── Reutiliza la misma imagen de Docker pero corre otro script
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    env_file:
+      - .env 
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    networks:
+      - soundwave-net
