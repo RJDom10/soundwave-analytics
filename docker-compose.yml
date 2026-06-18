@@ -182,7 +182,8 @@ services:
     build: ./services/ingesta/producers
     container_name: sw_lastfm_producer
     command: ["lastfm_producer.py"] # <── Dockerfile ejecuta esto usando el ENTRYPOINT
-    restart: unless-stopped
+    restart: "no"
+    profiles: ["ingesta-manual"]
     depends_on:
       kafka:
         condition: service_healthy
@@ -198,7 +199,8 @@ services:
     build: ./services/ingesta/producers
     container_name: sw_event_simulator
     command: ["event_simulator.py"] # <── Reutiliza la misma imagen de Docker pero corre otro script
-    restart: unless-stopped
+    restart: "no"
+    profiles: ["ingesta-manual"]
     depends_on:
       kafka:
         condition: service_healthy
